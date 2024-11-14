@@ -5,9 +5,37 @@ description = ""
 authors = ["Ryan Hill <ryan.hill@canonical.com>"]
 readme = "README.rst"
 
+[tool.poetry.scripts]
+deprecate-amis = "ami_deprecation_tool.cli:deprecate"
+
 [tool.poetry.dependencies]
 python = "^3.12"
+pyyaml = "^6.0.2"
+boto3 = "^1.35.43"
+click = "^8.1.7"
+pydantic = "^2.9.2"
+boto3-stubs = {extras = ["essential"], version = "^1.35.40"}
 
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.7.0"
+pytest = "^8.3.3"
+poethepoet = "^0.29.0"
+mypy = "^1.13.0"
+types-pyyaml = "^6.0.12.20240917"
+
+[tool.ruff]
+line-length = 120
+lint.extend-select = ["I"]
+
+[tool.poe.tasks]
+test = "pytest"
+type-check = "mypy ami_deprecation_tool"
+check = "ruff check"
+check-fix = "ruff check --fix"
+format-dry = "ruff format --diff"
+format = "ruff format"
+fix = ["check-fix", "format"]
+lint = ["check", "type-check", "format-dry"]
 
 [build-system]
 requires = ["poetry-core"]
