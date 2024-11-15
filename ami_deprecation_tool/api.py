@@ -1,8 +1,10 @@
 import datetime as dt
 import logging
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import StrEnum
+from itertools import cycle
 from typing import Callable
 
 import boto3
@@ -49,8 +51,12 @@ def deprecate(config: ConfigModel, dry_run: bool) -> None:
     for image_name, policy in config.images.items():
         # key image_name, and value is a list of tuples containing (region, ami)
         region_images = defaultdict(list)
-        for region, region_client in region_clients.items():
-            images = _get_images(region_client, image_name)
+
+        with ThreadPoolExecutor(max_workers=max(1, int(len(regions) / 2))) as executor:
+            images = executor.map(_get_images, region_clients.values(), cycle([image_name]))
+            images_by_region = dict(zip(region_clients.keys(), list(images)))
+
+        for region, images in images_by_region.items():
             for image in images:
                 region_images[image["Name"]].append(
                     RegionImageContainer(region, image["ImageId"], _get_snapshot_ids(image))
@@ -139,6 +145,17 @@ def _get_snapshot_ids(image: ImageTypeDef) -> list[str]:
     return [device["Ebs"]["SnapshotId"] for device in image["BlockDeviceMappings"] if "Ebs" in device]
 
 
+def _concurrent_map_operation(
+    action_func: Callable,
+    image_name: str,
+    region_clients: dict[str, EC2Client],
+    image_containers: list[RegionImageContainer],
+    dry_run: bool,
+):
+    with ThreadPoolExecutor(max_workers=max(1, int(len(region_clients) / 2))) as executor:
+        executor.map(action_func, cycle([image_name]), cycle([region_clients]), image_containers, cycle([dry_run]))
+
+
 def _deprecate_images(
     dry_run: bool, region_clients: dict[str, EC2Client], images: dict[str, list[RegionImageContainer]]
 ) -> None:
@@ -156,17 +173,20 @@ def _deprecate_images(
     for image_name, image_containers in images.items():
         # Set DeprecationTime 1 minute in the future
         logger.info(f"Found image for deprecation ({image_name})")
-        for image in image_containers:
-            logger.info(f"Deprecating image ({image_name}) in region ({image.region})")
-            client = region_clients[image.region]
-            _perform_operation(
-                client.enable_image_deprecation,
-                {
-                    "ImageId": image.image_id,
-                    "DeprecateAt": str(dt.datetime.now() + dt.timedelta(minutes=1)),
-                    "DryRun": dry_run,
-                },
-            )
+        _concurrent_map_operation(_deprecate_image, image_name, region_clients, image_containers, dry_run)
+
+
+def _deprecate_image(image_name: str, clients: dict[str, EC2Client], image: RegionImageContainer, dry_run: bool):
+    logger.info(f"Deprecating image ({image_name}) in region ({image.region})")
+    client: EC2Client = clients[image.region]
+    _perform_operation(
+        client.enable_image_deprecation,
+        {
+            "ImageId": image.image_id,
+            "DeprecateAt": str(dt.datetime.now() + dt.timedelta(minutes=1)),
+            "DryRun": dry_run,
+        },
+    )
 
 
 def _delete_images(
@@ -185,13 +205,16 @@ def _delete_images(
     """
     for image_name, image_containers in images.items():
         logger.info(f"Found image for deletion ({image_name})")
-        for image in image_containers:
-            logger.info(f"Deleting image ({image_name}) in region ({image.region})")
-            client = region_clients[image.region]
-            _perform_operation(client.deregister_image, {"ImageId": image.image_id, "DryRun": dry_run})
-            for snapshot_id in image.snapshots:
-                logger.info(f"Deleting associated snapshot: {snapshot_id}")
-                _perform_operation(client.delete_snapshot, {"SnapshotId": snapshot_id, "DryRun": dry_run})
+        _concurrent_map_operation(_delete_image, image_name, region_clients, image_containers, dry_run)
+
+
+def _delete_image(image_name: str, clients: dict[str, EC2Client], image: RegionImageContainer, dry_run: bool):
+    logger.info(f"Deleting image ({image_name}) in region ({image.region})")
+    client = clients[image.region]
+    _perform_operation(client.deregister_image, {"ImageId": image.image_id, "DryRun": dry_run})
+    for snapshot_id in image.snapshots:
+        logger.info(f"Deleting associated snapshot: {snapshot_id}")
+        _perform_operation(client.delete_snapshot, {"SnapshotId": snapshot_id, "DryRun": dry_run})
 
 
 def _perform_operation(operation: Callable, args: dict[str, str | bool]):
