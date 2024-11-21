@@ -213,6 +213,30 @@ def _delete_image(image_name: str, clients: dict[str, EC2Client], image: RegionI
     client = clients[image.region]
     _perform_operation(client.deregister_image, {"ImageId": image.image_id, "DryRun": dry_run})
     for snapshot_id in image.snapshots:
+        _delete_snapshot(client, snapshot_id, dry_run)
+
+
+def _delete_snapshot(client: EC2Client, snapshot_id: str, dry_run: bool):
+    result = client.describe_images(
+        Filters=[
+            {
+                "Name": "block-device-mapping.snapshot-id",
+                "Values": [snapshot_id],
+            }
+        ]
+    )
+    images_using_snapshot = [i["ImageId"] for i in result.get("Images", [])]
+
+    if images_using_snapshot:
+        dry_run_addendum = (
+            " dry-run will always indicate a skipped snapshot since the image wasn't deleted." if dry_run else ""
+        )
+        logger.info(
+            f"{len(images_using_snapshot)} images are using snapshot ({snapshot_id}), skipping delete."
+            f"{dry_run_addendum}"
+            f"\n - {'\n - '.join(i for i in images_using_snapshot)}"
+        )
+    else:
         logger.info(f"Deleting associated snapshot: {snapshot_id}")
         _perform_operation(client.delete_snapshot, {"SnapshotId": snapshot_id, "DryRun": dry_run})
 

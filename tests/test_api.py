@@ -82,3 +82,21 @@ def test_apply_policy(mock_boto, mock_deprecate_images, mock_delete_images):
             "image-4a": [("region-2", "ami-413")],
         },
     )
+
+
+@patch("ami_deprecation_tool.api._perform_operation")
+@patch("ami_deprecation_tool.api.boto3")
+def test_snapshot_deleted_if_not_used(mock_boto, mock_perform_operation):
+    mock_client = mock_boto.client.return_value
+    mock_client.describe_images.return_value = {"Images": []}
+    api._delete_snapshot(mock_client, "snapshot_id", True)
+    mock_perform_operation.assert_called_once()
+
+
+@patch("ami_deprecation_tool.api._perform_operation")
+@patch("ami_deprecation_tool.api.boto3")
+def test_snapshot_skipped_if_in_use(mock_boto, mock_perform_operation):
+    mock_client = mock_boto.client.return_value
+    mock_client.describe_images.return_value = {"Images": [{"ImageId": "ami-123"}]}
+    api._delete_snapshot(mock_client, "snapshot_id", True)
+    mock_perform_operation.assert_not_called()
