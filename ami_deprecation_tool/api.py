@@ -56,8 +56,8 @@ def deprecate(config: ConfigModel, dry_run: bool) -> None:
             images = executor.map(_get_images, region_clients.values(), cycle([image_name]))
             images_by_region = dict(zip(region_clients.keys(), list(images)))
 
-        for region, images in images_by_region.items():
-            for image in images:
+        for region, images_in_region in images_by_region.items():
+            for image in images_in_region:
                 region_images[image["Name"]].append(
                     RegionImageContainer(region, image["ImageId"], _get_snapshot_ids(image))
                 )
