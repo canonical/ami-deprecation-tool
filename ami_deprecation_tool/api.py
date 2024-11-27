@@ -3,7 +3,7 @@ import logging
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import Enum
 from itertools import cycle
 from typing import Callable
 
@@ -24,7 +24,7 @@ class RegionImageContainer:
     snapshots: list[str]
 
 
-class Action(StrEnum):
+class Action(str, Enum):
     DELETE = "delete"
     DEPRECATE = "deprecate"
 
@@ -231,10 +231,11 @@ def _delete_snapshot(client: EC2Client, snapshot_id: str, dry_run: bool):
         dry_run_addendum = (
             " dry-run will always indicate a skipped snapshot since the image wasn't deleted." if dry_run else ""
         )
+        joined_images = "\n - ".join(i for i in images_using_snapshot)
         logger.info(
             f"{len(images_using_snapshot)} images are using snapshot ({snapshot_id}), skipping delete."
             f"{dry_run_addendum}"
-            f"\n - {'\n - '.join(i for i in images_using_snapshot)}"
+            f"\n - {joined_images}"
         )
     else:
         logger.info(f"Deleting associated snapshot: {snapshot_id}")
