@@ -13,17 +13,17 @@ files = [
 
 [[package]]
 name = "boto3"
-version = "1.35.76"
+version = "1.35.79"
 description = "The AWS SDK for Python"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "boto3-1.35.76-py3-none-any.whl", hash = "sha256:69458399f41f57a50770c8974796d96978bcca44915c260319696bb43e47dffd"},
-    {file = "boto3-1.35.76.tar.gz", hash = "sha256:31ddcdb6f15dace2b68f6a0f11bdb58dd3ae79b8a3ccb174ff811ef0bbf938e0"},
+    {file = "boto3-1.35.79-py3-none-any.whl", hash = "sha256:a673b0b6378c9ccbf045a31a43195b175e12aa5c37fb7635fcbfc8f48fb857b3"},
+    {file = "boto3-1.35.79.tar.gz", hash = "sha256:1fa26217cd33ded82e55aed4460cd55f7223fa647916aa0d3c5d6828e6ec7135"},
 ]
 
 [package.dependencies]
-botocore = ">=1.35.76,<1.36.0"
+botocore = ">=1.35.79,<1.36.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.10.0,<0.11.0"
 
@@ -32,13 +32,13 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "boto3-stubs"
-version = "1.35.76"
-description = "Type annotations for boto3 1.35.76 generated with mypy-boto3-builder 8.5.0"
+version = "1.35.79"
+description = "Type annotations for boto3 1.35.79 generated with mypy-boto3-builder 8.6.3"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "boto3_stubs-1.35.76-py3-none-any.whl", hash = "sha256:882f69f02cca48176fa3adf7f354fe64a65268423c9696871d0f4d098af35431"},
-    {file = "boto3_stubs-1.35.76.tar.gz", hash = "sha256:32109b6a0c9720bf7c2e389655479c6dab4ee33c622e2cf2746c9e5ec527bae3"},
+    {file = "boto3_stubs-1.35.79-py3-none-any.whl", hash = "sha256:7ef170cf8771f7abacbb144bf11c4339932b1908762904ab26da8983a38cd3d8"},
+    {file = "boto3_stubs-1.35.79.tar.gz", hash = "sha256:a23915229d9c49aedfc3a377499ca39b8fd1ccb1424f38755e30fb9f548ea006"},
 ]
 
 [package.dependencies]
@@ -100,7 +100,7 @@ bedrock-data-automation-runtime = ["mypy-boto3-bedrock-data-automation-runtime (
 bedrock-runtime = ["mypy-boto3-bedrock-runtime (>=1.35.0,<1.36.0)"]
 billing = ["mypy-boto3-billing (>=1.35.0,<1.36.0)"]
 billingconductor = ["mypy-boto3-billingconductor (>=1.35.0,<1.36.0)"]
-boto3 = ["boto3 (==1.35.76)", "botocore (==1.35.76)"]
+boto3 = ["boto3 (==1.35.79)"]
 braket = ["mypy-boto3-braket (>=1.35.0,<1.36.0)"]
 budgets = ["mypy-boto3-budgets (>=1.35.0,<1.36.0)"]
 ce = ["mypy-boto3-ce (>=1.35.0,<1.36.0)"]
@@ -211,7 +211,7 @@ forecastquery = ["mypy-boto3-forecastquery (>=1.35.0,<1.36.0)"]
 frauddetector = ["mypy-boto3-frauddetector (>=1.35.0,<1.36.0)"]
 freetier = ["mypy-boto3-freetier (>=1.35.0,<1.36.0)"]
 fsx = ["mypy-boto3-fsx (>=1.35.0,<1.36.0)"]
-full = ["boto3-stubs-full"]
+full = ["boto3-stubs-full (>=1.35.0,<1.36.0)"]
 gamelift = ["mypy-boto3-gamelift (>=1.35.0,<1.36.0)"]
 geo-maps = ["mypy-boto3-geo-maps (>=1.35.0,<1.36.0)"]
 geo-places = ["mypy-boto3-geo-places (>=1.35.0,<1.36.0)"]
@@ -465,13 +465,13 @@ xray = ["mypy-boto3-xray (>=1.35.0,<1.36.0)"]
 
 [[package]]
 name = "botocore"
-version = "1.35.76"
+version = "1.35.79"
 description = "Low-level, data-driven core of boto 3."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "botocore-1.35.76-py3-none-any.whl", hash = "sha256:b4729d12d00267b3185628f83543917b6caae292385230ab464067621aa086af"},
-    {file = "botocore-1.35.76.tar.gz", hash = "sha256:a75a42ae53395796b8300c5fefb2d65a8696dc40dc85e49cf3a769e0c0202b13"},
+    {file = "botocore-1.35.79-py3-none-any.whl", hash = "sha256:e6b10bb9a357e3f5ca2e60f6dd15a85d311b9a476eb21b3c0c2a3b364a2897c8"},
+    {file = "botocore-1.35.79.tar.gz", hash = "sha256:245bfdda1b1508539ddd1819c67a8a2cc81780adf0715d3de418d64c4247f346"},
 ]
 
 [package.dependencies]
