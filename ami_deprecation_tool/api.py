@@ -142,7 +142,11 @@ def _get_snapshot_ids(image: ImageTypeDef) -> list[str]:
     :return: a list of snapshot ids associated with the given image
     :rtype: list[str]
     """
-    return [device["Ebs"]["SnapshotId"] for device in image["BlockDeviceMappings"] if "Ebs" in device]
+    return [
+        device["Ebs"]["SnapshotId"]
+        for device in image["BlockDeviceMappings"]
+        if "Ebs" in device and "SnapshotId" in device["Ebs"]
+    ]
 
 
 def _concurrent_map_operation(
