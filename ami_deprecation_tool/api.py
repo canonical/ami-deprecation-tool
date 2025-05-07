@@ -89,7 +89,7 @@ def _apply_deprecation_policy(
     """
     completed_serials: int = 0
 
-    for image in list(region_images.keys()):
+    for image in sorted(list(region_images.keys()), reverse=True):
         if completed_serials == policy.keep:
             break
         # check if image exists in all regions (i.e. is a completed upload)

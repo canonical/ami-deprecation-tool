@@ -49,12 +49,12 @@ def test_get_images(mock_boto):
 def test_apply_policy(mock_boto, mock_deprecate_images, mock_delete_images):
     mock_client = mock_boto.client.return_value
     region_images = {
-        "image-1": [("region-1", "ami-111"), ("region-2", "ami-112")],
-        "image-1a": [("region-2", "ami-113")],
-        "image-2": [("region-1", "ami-211"), ("region-2", "ami-212")],
-        "image-3": [("region-1", "ami-311"), ("region-2", "ami-312")],
-        "image-4": [("region-1", "ami-411"), ("region-2", "ami-412")],
-        "image-4a": [("region-2", "ami-413")],
+        "image-20250101": [("region-1", "ami-111"), ("region-2", "ami-112")],
+        "image-20250201": [("region-2", "ami-113")],
+        "image-20250301": [("region-1", "ami-211"), ("region-2", "ami-212")],
+        "image-20250401": [("region-1", "ami-311"), ("region-2", "ami-312")],
+        "image-20250501": [("region-1", "ami-411"), ("region-2", "ami-412")],
+        "image-20250601": [("region-2", "ami-413")],
     }
     region_clients = {"region-1": mock_client, "region-2": mock_client}
 
@@ -64,8 +64,8 @@ def test_apply_policy(mock_boto, mock_deprecate_images, mock_delete_images):
         True,
         region_clients,
         {
-            "image-4": [("region-1", "ami-411"), ("region-2", "ami-412")],
-            "image-4a": [("region-2", "ami-413")],
+            "image-20250101": [("region-1", "ami-111"), ("region-2", "ami-112")],
+            "image-20250201": [("region-2", "ami-113")],
         },
     )
 
@@ -75,11 +75,10 @@ def test_apply_policy(mock_boto, mock_deprecate_images, mock_delete_images):
         True,
         region_clients,
         {
-            "image-1a": [("region-2", "ami-113")],
-            "image-2": [("region-1", "ami-211"), ("region-2", "ami-212")],
-            "image-3": [("region-1", "ami-311"), ("region-2", "ami-312")],
-            "image-4": [("region-1", "ami-411"), ("region-2", "ami-412")],
-            "image-4a": [("region-2", "ami-413")],
+            "image-20250101": [("region-1", "ami-111"), ("region-2", "ami-112")],
+            "image-20250201": [("region-2", "ami-113")],
+            "image-20250301": [("region-1", "ami-211"), ("region-2", "ami-212")],
+            "image-20250401": [("region-1", "ami-311"), ("region-2", "ami-312")],
         },
     )
 
