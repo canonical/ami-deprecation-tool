@@ -44,7 +44,7 @@ def _load_policy(policy_path: str) -> ConfigModel:
     with open(policy_path) as fh:
         config = yaml.safe_load(fh)
     try:
-        return ConfigModel(**config)
+        return ConfigModel(**config["ami-deprecation-tool"])
     except ValidationError as e:
         sys.exit(e.json())
 
