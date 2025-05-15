@@ -12,7 +12,7 @@ from botocore.exceptions import ClientError
 from mypy_boto3_ec2.client import EC2Client
 from mypy_boto3_ec2.type_defs import ImageTypeDef
 
-from .configmodels import ConfigModel, ConfigPolicyModel
+from .configmodels import ConfigModel, ConfigOptionsModel, ConfigPolicyModel
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def deprecate(config: ConfigModel, dry_run: bool) -> None:
         region_images = defaultdict(list)
 
         with ThreadPoolExecutor(max_workers=max(1, int(len(regions) / 2))) as executor:
-            images = executor.map(_get_images, region_clients.values(), cycle([image_name]))
+            images = executor.map(_get_images, region_clients.values(), cycle([image_name]), cycle([config.options]))
             images_by_region = dict(zip(region_clients.keys(), list(images)))
 
         for region, images_in_region in images_by_region.items():
@@ -118,7 +118,7 @@ def _get_all_regions(client: EC2Client) -> list[str]:
     return [r["RegionName"] for r in resp["Regions"]]
 
 
-def _get_images(client: EC2Client, name: str) -> list[ImageTypeDef]:
+def _get_images(client: EC2Client, name: str, options: ConfigOptionsModel) -> list[ImageTypeDef]:
     """
     Get images in a single region matching the provided name pattern.
 
@@ -126,11 +126,19 @@ def _get_images(client: EC2Client, name: str) -> list[ImageTypeDef]:
     :type client: EC2Client
     :param name: An image name pattern to be searched
     :type name: str
+    :param options: Tool configuration options
+    :type options: ConfigOptionsModel
     :return: the images in reverse order sorted by Name
     :rtype: list[ImageTypeDef]
     """
     # assumes images are consistently sortable
-    images = client.describe_images(Owners=["self"], Filters=[{"Name": "name", "Values": [name]}])["Images"]
+    images = client.describe_images(
+        Owners=["self"],
+        IncludeDeprecated=options.include_deprecated,
+        IncludeDisabled=options.include_disabled,
+        Filters=[{"Name": "name", "Values": [name]}],
+        ExecutableUsers=options.executable_users,
+    )["Images"]
     return sorted(images, key=lambda x: x["Name"], reverse=True)
 
 

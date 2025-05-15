@@ -1,4 +1,6 @@
-from unittest.mock import call, patch
+from unittest.mock import MagicMock, call, patch
+
+import pytest
 
 from ami_deprecation_tool import api, configmodels
 
@@ -9,7 +11,7 @@ def test_deprecate_region_iteration(mock_boto, mock_get_all_regions):
     regions = ["region-1", "region-2", "region-3"]
     mock_get_all_regions.return_value = regions
 
-    config = configmodels.ConfigModel(**{"images": {}})
+    config = configmodels.ConfigModel(**{"images": {}, "options": {}})
 
     api.deprecate(config, True)
 
@@ -33,7 +35,8 @@ def test_get_images(mock_boto):
         ]
     }
 
-    result = api._get_images(mock_client, "image-1-$serial")
+    mock_options = MagicMock()
+    result = api._get_images(mock_client, "image-1-$serial", mock_options)
 
     assert result == [
         {"Name": "image-1-126", "ImageId": "126"},
@@ -41,6 +44,30 @@ def test_get_images(mock_boto):
         {"Name": "image-1-124", "ImageId": "124"},
         {"Name": "image-1-123", "ImageId": "123"},
     ]
+
+
+@pytest.mark.parametrize(
+    "options_dict",
+    [
+        {},
+        {"include_disabled": True, "include_deprecated": True, "executable_users": ["all"]},
+    ],
+)
+@patch("ami_deprecation_tool.api.boto3")
+def test_get_images_options(mock_boto, options_dict):
+    mock_client = mock_boto.client.return_value
+    options = configmodels.ConfigOptionsModel(**options_dict)
+    image_name = "image-name"
+
+    api._get_images(mock_client, image_name, options)
+
+    mock_client.describe_images.assert_called_once_with(
+        Owners=["self"],
+        IncludeDeprecated=options.include_deprecated,
+        IncludeDisabled=options.include_disabled,
+        Filters=[{"Name": "name", "Values": [image_name]}],
+        ExecutableUsers=options.executable_users,
+    )
 
 
 @patch("ami_deprecation_tool.api._delete_images")
