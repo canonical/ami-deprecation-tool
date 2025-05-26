@@ -189,7 +189,7 @@ def _deprecate_images(
 
 
 def _deprecate_image(image_name: str, clients: dict[str, EC2Client], image: RegionImageContainer, dry_run: bool):
-    logger.info(f"Deprecating image ({image_name}) in region ({image.region})")
+    logger.info(f"Deprecating image ({image_name} , {image.image_id}) in region ({image.region})")
     client: EC2Client = clients[image.region]
     _perform_operation(
         client.enable_image_deprecation,
@@ -221,7 +221,7 @@ def _delete_images(
 
 
 def _delete_image(image_name: str, clients: dict[str, EC2Client], image: RegionImageContainer, dry_run: bool):
-    logger.info(f"Deleting image ({image_name}) in region ({image.region})")
+    logger.info(f"Deleting image ({image_name}, {image.image_id}) in region ({image.region})")
     client = clients[image.region]
     _perform_operation(client.deregister_image, {"ImageId": image.image_id, "DryRun": dry_run})
     for snapshot_id in image.snapshots:
