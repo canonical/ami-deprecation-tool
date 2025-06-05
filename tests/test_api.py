@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -50,6 +51,7 @@ def test_get_images(mock_boto):
     "options_dict",
     [
         {},
+        {"include_disabled": False, "include_deprecated": False, "executable_users": ["all"]},
         {"include_disabled": True, "include_deprecated": True, "executable_users": ["all"]},
     ],
 )
@@ -58,16 +60,32 @@ def test_get_images_options(mock_boto, options_dict):
     mock_client = mock_boto.client.return_value
     options = configmodels.ConfigOptionsModel(**options_dict)
     image_name = "image-name"
+    future_deprecation_time = (datetime.now() + timedelta(minutes=5)).isoformat()
 
-    api._get_images(mock_client, image_name, options)
+    mock_images = {
+        "Images": [
+            {"Name": "image-name-1"},
+            {"Name": "image-name-2", "DeprecationTime": None},
+            {"Name": "image-name-3", "DeprecationTime": ""},
+            {"Name": "image-name-4", "DeprecationTime": future_deprecation_time},
+            {"Name": "image-name-4", "DeprecationTime": "2025-01-01T00:00:00Z"},
+        ]
+    }
+    mock_client.describe_images.return_value = mock_images
+
+    images = api._get_images(mock_client, image_name, options)
 
     mock_client.describe_images.assert_called_once_with(
         Owners=["self"],
-        IncludeDeprecated=options.include_deprecated,
         IncludeDisabled=options.include_disabled,
         Filters=[{"Name": "name", "Values": [image_name]}],
         ExecutableUsers=options.executable_users,
     )
+
+    if options.include_deprecated:
+        assert len(images) == 5
+    else:
+        assert len(images) == 4
 
 
 @patch("ami_deprecation_tool.api._delete_images")

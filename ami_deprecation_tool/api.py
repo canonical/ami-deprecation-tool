@@ -131,14 +131,26 @@ def _get_images(client: EC2Client, name: str, options: ConfigOptionsModel) -> li
     :return: the images in reverse order sorted by Name
     :rtype: list[ImageTypeDef]
     """
+
+    def _is_deprecated(image: ImageTypeDef) -> bool:
+        deprecation_time = image.get("DeprecationTime", "")
+        if not deprecation_time:
+            return False
+        if dt.datetime.fromisoformat(deprecation_time.rstrip("Z")) > dt.datetime.now():
+            return False
+        return True
+
     # assumes images are consistently sortable
     images = client.describe_images(
         Owners=["self"],
-        IncludeDeprecated=options.include_deprecated,
         IncludeDisabled=options.include_disabled,
         Filters=[{"Name": "name", "Values": [name]}],
         ExecutableUsers=options.executable_users,
     )["Images"]
+    # deprecated images are always returned for the owner, so filtering in
+    # describe images does nothing
+    if not options.include_deprecated:
+        images = [image for image in images if not _is_deprecated(image)]
     return sorted(images, key=lambda x: x["Name"], reverse=True)
 
 
