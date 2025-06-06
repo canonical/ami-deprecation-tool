@@ -8,7 +8,7 @@ on:
 
 jobs:
   tox:
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, AMD64, medium, noble]
     strategy:
       matrix:
         python: ["3.10", "3.11", "3.12", "3.13"]
@@ -24,7 +24,7 @@ jobs:
       - name: Run tox
         run: tox
   snap:
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, AMD64, medium, noble]
     steps:
       - uses: actions/checkout@v4
       - uses: snapcore/action-build@v1
