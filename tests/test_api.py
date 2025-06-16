@@ -144,3 +144,56 @@ def test_snapshot_skipped_if_in_use(mock_boto, mock_perform_operation):
     mock_client.describe_images.return_value = {"Images": [{"ImageId": "ami-123"}]}
     api._delete_snapshot(mock_client, "snapshot_id", True)
     mock_perform_operation.assert_not_called()
+
+
+@patch("ami_deprecation_tool.api._get_snapshot_ids")
+@patch("ami_deprecation_tool.api.boto3")
+def test_action_output(mock_boto, mock_get_snapshot_ids):
+    region1_images = {
+        "Images": [
+            {"ImageId": "ami-111", "Name": "Image-20250101"},
+            {"ImageId": "ami-112", "Name": "Image-20250102"},
+            {"ImageId": "ami-113", "Name": "Image-20250103"},
+            {"ImageId": "ami-114", "Name": "Image-20250104"},
+        ]
+    }
+    region2_images = {
+        "Images": [
+            {"ImageId": "ami-111", "Name": "Image-20250101"},
+            {"ImageId": "ami-112", "Name": "Image-20250102"},
+            # ami-113 is not in region2
+            {"ImageId": "ami-114", "Name": "Image-20250104"},
+        ]
+    }
+
+    base_client = MagicMock()
+    region1_client = MagicMock()
+    region2_client = MagicMock()
+
+    base_client.describe_regions.return_value = {"Regions": [{"RegionName": "region1"}, {"RegionName": "region2"}]}
+    region1_client.describe_images.return_value = region1_images
+    region2_client.describe_images.return_value = region2_images
+
+    mock_boto.client.side_effect = [base_client, region1_client, region2_client]
+
+    config = configmodels.ConfigModel(
+        **{
+            "images": {
+                "image-20250101": {"action": "deprecate", "keep": 2},
+            },
+            "options": {},
+        }
+    )
+
+    actions = api.deprecate(config, True)
+    assert actions == {
+        "image-20250101": api.Actions(
+            images=api.ActionImages(
+                delete=[],
+                deprecate=["Image-20250101"],
+                keep=["Image-20250104", "Image-20250102"],
+                skip=["Image-20250103"],
+            ),
+            policy={"action": "deprecate", "keep": 2},
+        )
+    }

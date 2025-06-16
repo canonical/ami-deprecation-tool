@@ -25,17 +25,21 @@ from .configmodels import ConfigModel
     count=True,
     help="Set log verbosity. The default log level is WARNING. '-v' will set to INFO and '-vv' will set to DEBUG",
 )
+@click.option("-o", "--output-actions", type=str, help="yaml file to write action log to")
 @click.option(
     "--dry-run/--no-dry-run",
     "dry_run",
     default=True,
     help="Prevent deprecation, only log intended actions (default=True)",
 )
-def deprecate(policy_path, log_level, dry_run):
+def deprecate(policy_path, log_level, output_actions, dry_run):
     _setup_logging(log_level)
     config = _load_policy(policy_path)
     try:
-        api.deprecate(config, dry_run)
+        actions = api.deprecate(config, dry_run)
+        if output_actions:
+            with open(output_actions, "w") as fh:
+                yaml.dump(actions, fh)
     except ClientError as e:
         sys.exit(e)
 

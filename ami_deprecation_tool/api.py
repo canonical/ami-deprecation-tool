@@ -2,7 +2,7 @@ import datetime as dt
 import logging
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from itertools import cycle
 from typing import Callable
@@ -29,7 +29,21 @@ class Action(str, Enum):
     DEPRECATE = "deprecate"
 
 
-def deprecate(config: ConfigModel, dry_run: bool) -> None:
+@dataclass
+class ActionImages:
+    delete: list[str] = field(default_factory=list)
+    deprecate: list[str] = field(default_factory=list)
+    keep: list[str] = field(default_factory=list)
+    skip: list[str] = field(default_factory=list)
+
+
+@dataclass
+class Actions:
+    images: ActionImages
+    policy: dict[str, str | int]
+
+
+def deprecate(config: ConfigModel, dry_run: bool) -> dict[str, Actions]:
     """
     Identify images to be deprecated and apply specified policy
 
@@ -37,6 +51,8 @@ def deprecate(config: ConfigModel, dry_run: bool) -> None:
     :type config: ConfigModel
     :param dry_run: disables actioning the images if True
     :type dry_run: bool
+    :return: dictionary mapping action name (e.g. keep, deprecate, delete) to a list of images
+    :rtype: dict[str, Actions]
     """
     client = boto3.client("ec2")
     regions = _get_all_regions(client)
@@ -48,6 +64,7 @@ def deprecate(config: ConfigModel, dry_run: bool) -> None:
     for region in regions:
         region_clients[region] = boto3.client("ec2", region_name=region)
 
+    actions_dict = {}
     for image_name, policy in config.images.items():
         # key image_name, and value is a list of tuples containing (region, ami)
         region_images = defaultdict(list)
@@ -64,7 +81,11 @@ def deprecate(config: ConfigModel, dry_run: bool) -> None:
 
         sorted_image_regions = dict(sorted(region_images.items()))
 
-        _apply_deprecation_policy(sorted_image_regions, region_clients, policy, dry_run)
+        image_actions = _apply_deprecation_policy(sorted_image_regions, region_clients, policy, dry_run)
+
+        actions_dict[image_name] = Actions(policy=dict(policy), images=image_actions)
+
+    return actions_dict
 
 
 def _apply_deprecation_policy(
@@ -72,7 +93,7 @@ def _apply_deprecation_policy(
     region_clients: dict[str, EC2Client],
     policy: ConfigPolicyModel,
     dry_run: bool,
-) -> None:
+) -> ActionImages:
     """
     Identify images to be deprecated based on policy and upload completeness (i.e. an
     image is present in all regions)
@@ -86,8 +107,12 @@ def _apply_deprecation_policy(
     :type policy: ConfigPolicyModel
     :param dry_run: disables actioning the images if True
     :type dry_run: bool
+    :return: dictionary mapping action name (e.g. keep, deprecate, delete) to a list of images
+    :rtype: ActionImages
     """
     completed_serials: int = 0
+
+    image_actions = ActionImages()
 
     for image in sorted(list(region_images.keys()), reverse=True):
         if completed_serials == policy.keep:
@@ -96,13 +121,20 @@ def _apply_deprecation_policy(
         is_complete = len(region_images[image]) == len(region_clients.keys())
         if is_complete:
             completed_serials += 1
+            image_actions.keep.append(image)
+        else:
+            image_actions.skip.append(image)
         region_images.pop(image)
 
     match policy.action:
         case Action.DEPRECATE:
+            image_actions.deprecate = list(region_images.keys())
             _deprecate_images(dry_run, region_clients, region_images)
         case Action.DELETE:
+            image_actions.delete = list(region_images.keys())
             _delete_images(dry_run, region_clients, region_images)
+
+    return image_actions
 
 
 def _get_all_regions(client: EC2Client) -> list[str]:
