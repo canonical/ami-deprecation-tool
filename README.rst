@@ -33,7 +33,7 @@ Policy Definition
 
 In the above example, ``some/image/path/image-A-$serial`` will find all images across all regions (owned by the current user) matching ``some/image/path/image-A-*`` where serial is replaced with a wildcard. These images will then be sorted by whatever matches in the place of $serial. The policy defined for this image is ``{action: delete, keep 1}`` meaning delete/deregister all except the latest image as defined by the sorted serials.
 
-The second image (``some/image/path/image-A-$serial``) has a policy of ``{action: deprecate, keep 3}``. Rather than deregistering the AMIs, all but the latest three will be scheduled for deprecation 1 minute in the future. These images will not be visible in the browser and will only show in API results if the caller specifies they are searching for deprecated AMIs
+The second image (``some/image/path/image-B-$serial``) has a policy of ``{action: deprecate, keep 3}``. Rather than deregistering the AMIs, all but the latest three will be scheduled for deprecation 1 minute in the future. These images will not be visible in the browser and will only show in API results if the caller specifies they are searching for deprecated AMIs
 
 **Note: $serial is assumed to be consistently sortable using normal alphanumeric sorting**
 
