@@ -9,6 +9,32 @@ ONE_MONTH_AGO = datetime.now() - timedelta(days=30)
 SIX_MONTHS_AGO = datetime.now() - timedelta(days=180)
 
 
+def mk_image(image_id, name, date):
+    return {"ImageId": image_id, "Name": name, "CreationDate": date}
+
+
+def make_region_images(
+    image_count_expired: int, image_count_unexpired: int, missing: list[int] = []
+) -> dict[str, list[dict]]:
+    """
+    Generate a dict shaped like boto3.describe_images with a list of images.
+    :param image_count_expired: number of images to create with an old creation date
+    :param image_count_unexpired: number of images to create with a new creation date
+    :param image_count_expired: list of ami suffixes (like ["111","112","113"])
+    :param missing: optional list of ids to skip (simulate images absent in this region)
+    """
+
+    images = []
+
+    for id_ in range(1, image_count_expired + image_count_unexpired + 1):
+        if id_ in missing:
+            continue
+        creation_date = SIX_MONTHS_AGO if id_ < image_count_expired else ONE_MONTH_AGO
+        images.append(mk_image(f"ami-{110 + id_}", f"Image-2025{100 + id_:04d}", creation_date))
+
+    return {"Images": images}
+
+
 @patch("ami_deprecation_tool.api._get_all_regions")
 @patch("ami_deprecation_tool.api.boto3")
 def test_deprecate_region_iteration(mock_boto, mock_get_all_regions):
@@ -32,10 +58,10 @@ def test_get_images(mock_boto):
     mock_client = mock_boto.client.return_value
     mock_client.describe_images.return_value = {
         "Images": [
-            {"Name": "image-1-125", "ImageId": "125", "CreationDate": ONE_MONTH_AGO},
-            {"Name": "image-1-124", "ImageId": "124", "CreationDate": ONE_MONTH_AGO},
-            {"Name": "image-1-126", "ImageId": "126", "CreationDate": ONE_MONTH_AGO},
-            {"Name": "image-1-123", "ImageId": "123", "CreationDate": ONE_MONTH_AGO},
+            mk_image("125", "image-1-125", ONE_MONTH_AGO),
+            mk_image("124", "image-1-124", ONE_MONTH_AGO),
+            mk_image("126", "image-1-126", ONE_MONTH_AGO),
+            mk_image("123", "image-1-123", ONE_MONTH_AGO),
         ]
     }
 
@@ -43,10 +69,10 @@ def test_get_images(mock_boto):
     result = api._get_images(mock_client, "image-1-$serial", mock_options)
 
     assert result == [
-        {"Name": "image-1-126", "ImageId": "126", "CreationDate": ONE_MONTH_AGO},
-        {"Name": "image-1-125", "ImageId": "125", "CreationDate": ONE_MONTH_AGO},
-        {"Name": "image-1-124", "ImageId": "124", "CreationDate": ONE_MONTH_AGO},
-        {"Name": "image-1-123", "ImageId": "123", "CreationDate": ONE_MONTH_AGO},
+        mk_image("126", "image-1-126", ONE_MONTH_AGO),
+        mk_image("125", "image-1-125", ONE_MONTH_AGO),
+        mk_image("124", "image-1-124", ONE_MONTH_AGO),
+        mk_image("123", "image-1-123", ONE_MONTH_AGO),
     ]
 
 
@@ -97,12 +123,24 @@ def test_get_images_options(mock_boto, options_dict):
 def test_apply_policy(mock_boto, mock_deprecate_images, mock_delete_images):
     mock_client = mock_boto.client.return_value
     region_images = {
-        "image-20250101": [("region-1", "ami-111",ONE_MONTH_AGO), ("region-2", "ami-112",ONE_MONTH_AGO)],
-        "image-20250201": [("region-2", "ami-113",ONE_MONTH_AGO)],
-        "image-20250301": [("region-1", "ami-211",ONE_MONTH_AGO), ("region-2", "ami-212",ONE_MONTH_AGO)],
-        "image-20250401": [("region-1", "ami-311",ONE_MONTH_AGO), ("region-2", "ami-312",ONE_MONTH_AGO)],
-        "image-20250501": [("region-1", "ami-411",ONE_MONTH_AGO), ("region-2", "ami-412",ONE_MONTH_AGO)],
-        "image-20250601": [("region-2", "ami-413",ONE_MONTH_AGO)],
+        "image-20250101": [
+            mk_reg_img("region-1", "ami-111", ONE_MONTH_AGO),
+            mk_reg_img("region-2", "ami-112", ONE_MONTH_AGO),
+        ],
+        "image-20250201": [mk_reg_img("region-2", "ami-113", ONE_MONTH_AGO)],
+        "image-20250301": [
+            mk_reg_img("region-1", "ami-211", ONE_MONTH_AGO),
+            mk_reg_img("region-2", "ami-212", ONE_MONTH_AGO),
+        ],
+        "image-20250401": [
+            mk_reg_img("region-1", "ami-311", ONE_MONTH_AGO),
+            mk_reg_img("region-2", "ami-312", ONE_MONTH_AGO),
+        ],
+        "image-20250501": [
+            mk_reg_img("region-1", "ami-411", ONE_MONTH_AGO),
+            mk_reg_img("region-2", "ami-412", ONE_MONTH_AGO),
+        ],
+        "image-20250601": [mk_reg_img("region-2", "ami-413", ONE_MONTH_AGO)],
     }
     region_clients = {"region-1": mock_client, "region-2": mock_client}
 
@@ -112,8 +150,11 @@ def test_apply_policy(mock_boto, mock_deprecate_images, mock_delete_images):
         True,
         region_clients,
         {
-            "image-20250101": [("region-1", "ami-111",ONE_MONTH_AGO), ("region-2", "ami-112",ONE_MONTH_AGO)],
-            "image-20250201": [("region-2", "ami-113",ONE_MONTH_AGO)],
+            "image-20250101": [
+                mk_reg_img("region-1", "ami-111", ONE_MONTH_AGO),
+                mk_reg_img("region-2", "ami-112", ONE_MONTH_AGO),
+            ],
+            "image-20250201": [mk_reg_img("region-2", "ami-113", ONE_MONTH_AGO)],
         },
     )
 
@@ -123,10 +164,19 @@ def test_apply_policy(mock_boto, mock_deprecate_images, mock_delete_images):
         True,
         region_clients,
         {
-            "image-20250101": [("region-1", "ami-111",ONE_MONTH_AGO), ("region-2", "ami-112",ONE_MONTH_AGO)],
-            "image-20250201": [("region-2", "ami-113",ONE_MONTH_AGO)],
-            "image-20250301": [("region-1", "ami-211",ONE_MONTH_AGO), ("region-2", "ami-212",ONE_MONTH_AGO)],
-            "image-20250401": [("region-1", "ami-311",ONE_MONTH_AGO), ("region-2", "ami-312",ONE_MONTH_AGO)],
+            "image-20250101": [
+                mk_reg_img("region-1", "ami-111", ONE_MONTH_AGO),
+                mk_reg_img("region-2", "ami-112", ONE_MONTH_AGO),
+            ],
+            "image-20250201": [mk_reg_img("region-2", "ami-113", ONE_MONTH_AGO)],
+            "image-20250301": [
+                mk_reg_img("region-1", "ami-211", ONE_MONTH_AGO),
+                mk_reg_img("region-2", "ami-212", ONE_MONTH_AGO),
+            ],
+            "image-20250401": [
+                mk_reg_img("region-1", "ami-311", ONE_MONTH_AGO),
+                mk_reg_img("region-2", "ami-312", ONE_MONTH_AGO),
+            ],
         },
     )
 
@@ -152,22 +202,9 @@ def test_snapshot_skipped_if_in_use(mock_boto, mock_perform_operation):
 @patch("ami_deprecation_tool.api._get_snapshot_ids")
 @patch("ami_deprecation_tool.api.boto3")
 def test_action_output(mock_boto, mock_get_snapshot_ids):
-    region1_images = {
-        "Images": [
-            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": ONE_MONTH_AGO},
-            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": ONE_MONTH_AGO},
-            {"ImageId": "ami-113", "Name": "Image-20250103", "CreationDate": ONE_MONTH_AGO},
-            {"ImageId": "ami-114", "Name": "Image-20250104", "CreationDate": ONE_MONTH_AGO},
-        ]
-    }
-    region2_images = {
-        "Images": [
-            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": ONE_MONTH_AGO},
-            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": ONE_MONTH_AGO},
-            # ami-113 is not in region2
-            {"ImageId": "ami-114", "Name": "Image-20250104", "CreationDate": ONE_MONTH_AGO},
-        ]
-    }
+    region1_images = make_region_images(0, 4)
+    # ami-113 is not in region2
+    region2_images = make_region_images(0, 4, [3])
 
     base_client = MagicMock()
     region1_client = MagicMock()
@@ -205,26 +242,9 @@ def test_action_output(mock_boto, mock_get_snapshot_ids):
 @patch("ami_deprecation_tool.api._get_snapshot_ids")
 @patch("ami_deprecation_tool.api.boto3")
 def test_deprecate_images_past_expiration(mock_boto, mock_get_snapshot_ids):
-    region1_images = {
-        "Images": [
-            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-113", "Name": "Image-20250103", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-114", "Name": "Image-20250104", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-115", "Name": "Image-20250105", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-116", "Name": "Image-20250106", "CreationDate": ONE_MONTH_AGO},
-        ]
-    }
-    region2_images = {
-        "Images": [
-            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-113", "Name": "Image-20250103", "CreationDate": SIX_MONTHS_AGO},
-            # ami-114 is not in region2
-            {"ImageId": "ami-115", "Name": "Image-20250105", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-116", "Name": "Image-20250106", "CreationDate": ONE_MONTH_AGO},
-        ]
-    }
+    region1_images = make_region_images(5, 1)
+    # ami-114 is not in region2
+    region2_images = make_region_images(5, 1, [4])
 
     base_client = MagicMock()
     region1_client = MagicMock()
@@ -263,26 +283,9 @@ def test_deprecate_images_past_expiration(mock_boto, mock_get_snapshot_ids):
 @patch("ami_deprecation_tool.api._get_snapshot_ids")
 @patch("ami_deprecation_tool.api.boto3")
 def test_keep_past_expiration(mock_boto, mock_get_snapshot_ids):
-    region1_images = {
-        "Images": [
-            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-113", "Name": "Image-20250103", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-114", "Name": "Image-20250104", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-115", "Name": "Image-20250105", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-116", "Name": "Image-20250106", "CreationDate": SIX_MONTHS_AGO},
-        ]
-    }
-    region2_images = {
-        "Images": [
-            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-113", "Name": "Image-20250103", "CreationDate": SIX_MONTHS_AGO},
-            # ami-114 is not in region2
-            {"ImageId": "ami-115", "Name": "Image-20250105", "CreationDate": SIX_MONTHS_AGO},
-            {"ImageId": "ami-116", "Name": "Image-20250106", "CreationDate": SIX_MONTHS_AGO},
-        ]
-    }
+    region1_images = make_region_images(6, 0)
+    # ami-114 is not in region2
+    region2_images = make_region_images(6, 0, [4])
 
     base_client = MagicMock()
     region1_client = MagicMock()
@@ -321,26 +324,10 @@ def test_keep_past_expiration(mock_boto, mock_get_snapshot_ids):
 @patch("ami_deprecation_tool.api._get_snapshot_ids")
 @patch("ami_deprecation_tool.api.boto3")
 def test_keep_unexpired(mock_boto, mock_get_snapshot_ids):
-    region1_images = {
-        "Images": [
-            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": ONE_MONTH_AGO},
-            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": ONE_MONTH_AGO},
-            {"ImageId": "ami-113", "Name": "Image-20250103", "CreationDate": ONE_MONTH_AGO},
-            {"ImageId": "ami-114", "Name": "Image-20250104", "CreationDate": ONE_MONTH_AGO},
-            {"ImageId": "ami-115", "Name": "Image-20250105", "CreationDate": ONE_MONTH_AGO},
-            {"ImageId": "ami-116", "Name": "Image-20250106", "CreationDate": ONE_MONTH_AGO},
-        ]
-    }
-    region2_images = {
-        "Images": [
-            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": ONE_MONTH_AGO},
-            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": ONE_MONTH_AGO},
-            {"ImageId": "ami-113", "Name": "Image-20250103", "CreationDate": ONE_MONTH_AGO},
-            # ami-114 is not in region2
-            {"ImageId": "ami-115", "Name": "Image-20250105", "CreationDate": ONE_MONTH_AGO},
-            {"ImageId": "ami-116", "Name": "Image-20250106", "CreationDate": ONE_MONTH_AGO},
-        ]
-    }
+    region1_images = make_region_images(0, 6)
+
+    # ami-114 is not in region2
+    region2_images = make_region_images(0, 6, [4])
 
     base_client = MagicMock()
     region1_client = MagicMock()
