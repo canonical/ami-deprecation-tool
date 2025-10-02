@@ -9,6 +9,7 @@ from typing import Callable
 
 import boto3
 from botocore.exceptions import ClientError
+from dateutil.relativedelta import relativedelta
 from mypy_boto3_ec2.client import EC2Client
 from mypy_boto3_ec2.type_defs import ImageTypeDef
 
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 class RegionImageContainer:
     region: str
     image_id: str
+    creation_date: dt.datetime
     snapshots: list[str]
 
 
@@ -76,7 +78,12 @@ def deprecate(config: ConfigModel, dry_run: bool) -> dict[str, Actions]:
         for region, images_in_region in images_by_region.items():
             for image in images_in_region:
                 region_images[image["Name"]].append(
-                    RegionImageContainer(region, image["ImageId"], _get_snapshot_ids(image))
+                    RegionImageContainer(
+                        region,
+                        image["ImageId"],
+                        dt.datetime.fromisoformat(str(image["CreationDate"])),
+                        _get_snapshot_ids(image),
+                    )
                 )
 
         sorted_image_regions = dict(sorted(region_images.items()))
@@ -86,6 +93,27 @@ def deprecate(config: ConfigModel, dry_run: bool) -> dict[str, Actions]:
         actions_dict[image_name] = Actions(policy=dict(policy), images=image_actions)
 
     return actions_dict
+
+
+def _image_is_expired(images: list[RegionImageContainer], policy: ConfigPolicyModel) -> bool:
+    """
+    Identify if image is past expiration based on policy
+
+    :param images: a list of tuples pairing the region name with the ami id in that region
+    :type images: list[RegionImageContainer]
+    :param policy: The deprecation policy for the given image set
+    :type policy: ConfigPolicyModel
+    :return: boolean representing if the image is past the policy expiration date
+    :rtype: bool
+    """
+
+    # handle missing creation date or empty policy expiration
+    if policy.expiration_days is None:
+        return True
+
+    cutoff = dt.datetime.now() - relativedelta(days=policy.expiration_days)
+
+    return images[0].creation_date < cutoff
 
 
 def _apply_deprecation_policy(
@@ -115,8 +143,9 @@ def _apply_deprecation_policy(
     image_actions = ActionImages()
 
     for image in sorted(list(region_images.keys()), reverse=True):
-        if completed_serials == policy.keep:
+        if completed_serials == policy.keep and _image_is_expired(region_images[image], policy):
             break
+
         # check if image exists in all regions (i.e. is a completed upload)
         is_complete = len(region_images[image]) == len(region_clients.keys())
         if is_complete:

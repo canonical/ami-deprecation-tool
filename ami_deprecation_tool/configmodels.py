@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -12,6 +12,7 @@ class ConfigPolicyModel(BaseModel):
         description="The action to be performed on AMIs that are out of policy"
     )
     keep: int = Field(description="The number of AMIs to exempt from the policy")
+    expiration_days: Optional[int] = Field(description="How many days to exempt AMIs from the policy", default=None)
 
 
 class ConfigOptionsModel(BaseModel):
