@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, call, patch
 
@@ -11,6 +12,10 @@ SIX_MONTHS_AGO = datetime.now() - timedelta(days=180)
 
 def mk_image(image_id, name, date):
     return {"ImageId": image_id, "Name": name, "CreationDate": date}
+
+
+def mk_reg_img(region, image_id, date):
+    return api.RegionImageContainer(region=region, image_id=image_id, creation_date=date, snapshots=[])
 
 
 def make_region_images(
@@ -199,165 +204,104 @@ def test_snapshot_skipped_if_in_use(mock_boto, mock_perform_operation):
     mock_perform_operation.assert_not_called()
 
 
-@patch("ami_deprecation_tool.api._get_snapshot_ids")
-@patch("ami_deprecation_tool.api.boto3")
-def test_action_output(mock_boto, mock_get_snapshot_ids):
-    region1_images = make_region_images(0, 4)
-    # ami-113 is not in region2
-    region2_images = make_region_images(0, 4, [3])
-
-    base_client = MagicMock()
-    region1_client = MagicMock()
-    region2_client = MagicMock()
-
-    base_client.describe_regions.return_value = {"Regions": [{"RegionName": "region1"}, {"RegionName": "region2"}]}
-    region1_client.describe_images.return_value = region1_images
-    region2_client.describe_images.return_value = region2_images
-
-    mock_boto.client.side_effect = [base_client, region1_client, region2_client]
-
-    config = configmodels.ConfigModel(
-        **{
-            "images": {
-                "image-20250101": {"action": "deprecate", "keep": 2},
-            },
-            "options": {},
-        }
-    )
-
-    actions = api.deprecate(config, True)
-    assert actions == {
+def expect(delete, deprecate, keep, skip, policy):
+    return {
         "image-20250101": api.Actions(
             images=api.ActionImages(
-                delete=[],
-                deprecate=["Image-20250101"],
-                keep=["Image-20250104", "Image-20250102"],
-                skip=["Image-20250103"],
+                delete=delete,
+                deprecate=deprecate,
+                keep=keep,
+                skip=skip,
             ),
-            policy={"action": "deprecate", "keep": 2, "keep_days": 0},
+            policy=policy,
         )
     }
 
 
-@patch("ami_deprecation_tool.api._get_snapshot_ids")
+@dataclass(frozen=True)
+class Scenario:
+    # ---- inputs ----
+    region1: dict
+    region2: dict
+    policy: dict
+    # ---- expected outputs ----
+    delete: list[str]
+    deprecate: list[str]
+    keep: list[str]
+    skip: list[str]
+
+
+SCENARIOS: dict[str, Scenario] = {
+    # 1. test_action_output
+    "action_output": Scenario(
+        region1=make_region_images(image_count_expired=0, image_count_unexpired=4),
+        region2=make_region_images(image_count_expired=0, image_count_unexpired=4, missing=[3]),
+        policy={"action": "deprecate", "keep": 2, "keep_days": 0},
+        delete=[],
+        deprecate=["Image-20250101"],
+        keep=["Image-20250104", "Image-20250102"],
+        skip=["Image-20250103"],
+    ),
+    # 2. test_deprecate_images_past_expiration”)
+    # Some images expired, only keep within keep budget
+    "past_expiration": Scenario(
+        region1=make_region_images(image_count_expired=5, image_count_unexpired=1),
+        region2=make_region_images(image_count_expired=5, image_count_unexpired=1, missing=[4]),
+        policy={"action": "deprecate", "keep": 3, "keep_days": 90},
+        delete=[],
+        deprecate=["Image-20250101", "Image-20250102"],
+        keep=["Image-20250106", "Image-20250105", "Image-20250103"],
+        skip=["Image-20250104"],
+    ),
+    # 3. test_keep_past_expiration
+    # All images expired but keep-budget still applies
+    "keep_past_expiration": Scenario(
+        region1=make_region_images(image_count_expired=6, image_count_unexpired=0),
+        region2=make_region_images(image_count_expired=6, image_count_unexpired=0, missing=[4]),
+        policy={"action": "deprecate", "keep": 3, "keep_days": 90},
+        delete=[],
+        deprecate=["Image-20250101", "Image-20250102"],
+        keep=["Image-20250106", "Image-20250105", "Image-20250103"],
+        skip=["Image-20250104"],
+    ),
+    # 4. test_keep_unexpired
+    # No image expired, so nothing removed
+    "unexpired": Scenario(
+        region1=make_region_images(image_count_expired=0, image_count_unexpired=6),
+        region2=make_region_images(image_count_expired=0, image_count_unexpired=6, missing=[4]),
+        policy={"action": "deprecate", "keep": 3, "keep_days": 90},
+        delete=[],
+        deprecate=[],
+        keep=[
+            "Image-20250106",
+            "Image-20250105",
+            "Image-20250103",
+            "Image-20250102",
+            "Image-20250101",
+        ],
+        skip=["Image-20250104"],
+    ),
+}
+
+
+@pytest.mark.parametrize("name, scenario", SCENARIOS.items(), ids=list(SCENARIOS))
+@patch("ami_deprecation_tool.api._get_snapshot_ids", return_value=[])
 @patch("ami_deprecation_tool.api.boto3")
-def test_deprecate_images_past_expiration(mock_boto, mock_get_snapshot_ids):
-    region1_images = make_region_images(5, 1)
-    # ami-114 is not in region2
-    region2_images = make_region_images(5, 1, [4])
+def test_deprecation_scenarios(mock_boto, _snap, name: str, scenario: Scenario):
+    # common boto plumbing
+    base, r1, r2 = MagicMock(), MagicMock(), MagicMock()
+    base.describe_regions.return_value = {"Regions": [{"RegionName": "region1"}, {"RegionName": "region2"}]}
+    r1.describe_images.return_value = scenario.region1
+    r2.describe_images.return_value = scenario.region2
+    mock_boto.client.side_effect = [base, r1, r2]
 
-    base_client = MagicMock()
-    region1_client = MagicMock()
-    region2_client = MagicMock()
+    cfg = configmodels.ConfigModel(images={"image-20250101": scenario.policy}, options={})
+    actions = api.deprecate(cfg, True)
 
-    base_client.describe_regions.return_value = {"Regions": [{"RegionName": "region1"}, {"RegionName": "region2"}]}
-    region1_client.describe_images.return_value = region1_images
-    region2_client.describe_images.return_value = region2_images
-
-    mock_boto.client.side_effect = [base_client, region1_client, region2_client]
-
-    config = configmodels.ConfigModel(
-        **{
-            "images": {
-                "image-20250101": {"action": "deprecate", "keep": 3, "keep_days": 90},
-            },
-            "options": {},
-        }
+    assert actions == expect(
+        scenario.delete,
+        scenario.deprecate,
+        scenario.keep,
+        scenario.skip,
+        scenario.policy,
     )
-
-    actions = api.deprecate(config, True)
-
-    assert actions == {
-        "image-20250101": api.Actions(
-            images=api.ActionImages(
-                delete=[],
-                deprecate=["Image-20250101", "Image-20250102"],
-                keep=["Image-20250106", "Image-20250105", "Image-20250103"],
-                skip=["Image-20250104"],
-            ),
-            policy={"action": "deprecate", "keep": 3, "keep_days": 90},
-        )
-    }
-
-
-@patch("ami_deprecation_tool.api._get_snapshot_ids")
-@patch("ami_deprecation_tool.api.boto3")
-def test_keep_past_expiration(mock_boto, mock_get_snapshot_ids):
-    region1_images = make_region_images(6, 0)
-    # ami-114 is not in region2
-    region2_images = make_region_images(6, 0, [4])
-
-    base_client = MagicMock()
-    region1_client = MagicMock()
-    region2_client = MagicMock()
-
-    base_client.describe_regions.return_value = {"Regions": [{"RegionName": "region1"}, {"RegionName": "region2"}]}
-    region1_client.describe_images.return_value = region1_images
-    region2_client.describe_images.return_value = region2_images
-
-    mock_boto.client.side_effect = [base_client, region1_client, region2_client]
-
-    config = configmodels.ConfigModel(
-        **{
-            "images": {
-                "image-20250101": {"action": "deprecate", "keep": 3, "keep_days": 90},
-            },
-            "options": {},
-        }
-    )
-
-    actions = api.deprecate(config, True)
-
-    assert actions == {
-        "image-20250101": api.Actions(
-            images=api.ActionImages(
-                delete=[],
-                deprecate=["Image-20250101", "Image-20250102"],
-                keep=["Image-20250106", "Image-20250105", "Image-20250103"],
-                skip=["Image-20250104"],
-            ),
-            policy={"action": "deprecate", "keep": 3, "keep_days": 90},
-        )
-    }
-
-
-@patch("ami_deprecation_tool.api._get_snapshot_ids")
-@patch("ami_deprecation_tool.api.boto3")
-def test_keep_unexpired(mock_boto, mock_get_snapshot_ids):
-    region1_images = make_region_images(0, 6)
-
-    # ami-114 is not in region2
-    region2_images = make_region_images(0, 6, [4])
-
-    base_client = MagicMock()
-    region1_client = MagicMock()
-    region2_client = MagicMock()
-
-    base_client.describe_regions.return_value = {"Regions": [{"RegionName": "region1"}, {"RegionName": "region2"}]}
-    region1_client.describe_images.return_value = region1_images
-    region2_client.describe_images.return_value = region2_images
-
-    mock_boto.client.side_effect = [base_client, region1_client, region2_client]
-
-    config = configmodels.ConfigModel(
-        **{
-            "images": {
-                "image-20250101": {"action": "deprecate", "keep": 3, "keep_days": 90},
-            },
-            "options": {},
-        }
-    )
-
-    actions = api.deprecate(config, True)
-
-    assert actions == {
-        "image-20250101": api.Actions(
-            images=api.ActionImages(
-                delete=[],
-                deprecate=[],
-                keep=["Image-20250106", "Image-20250105", "Image-20250103", "Image-20250102", "Image-20250101"],
-                skip=["Image-20250104"],
-            ),
-            policy={"action": "deprecate", "keep": 3, "keep_days": 90},
-        )
-    }
