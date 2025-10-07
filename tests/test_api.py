@@ -5,6 +5,9 @@ import pytest
 
 from ami_deprecation_tool import api, configmodels
 
+ONE_MONTH_AGO = datetime.now() - timedelta(days=30)
+SIX_MONTHS_AGO = datetime.now() - timedelta(days=180)
+
 
 @patch("ami_deprecation_tool.api._get_all_regions")
 @patch("ami_deprecation_tool.api.boto3")
@@ -29,10 +32,10 @@ def test_get_images(mock_boto):
     mock_client = mock_boto.client.return_value
     mock_client.describe_images.return_value = {
         "Images": [
-            {"Name": "image-1-125", "ImageId": "125"},
-            {"Name": "image-1-124", "ImageId": "124"},
-            {"Name": "image-1-126", "ImageId": "126"},
-            {"Name": "image-1-123", "ImageId": "123"},
+            {"Name": "image-1-125", "ImageId": "125", "CreationDate": ONE_MONTH_AGO},
+            {"Name": "image-1-124", "ImageId": "124", "CreationDate": ONE_MONTH_AGO},
+            {"Name": "image-1-126", "ImageId": "126", "CreationDate": ONE_MONTH_AGO},
+            {"Name": "image-1-123", "ImageId": "123", "CreationDate": ONE_MONTH_AGO},
         ]
     }
 
@@ -40,10 +43,10 @@ def test_get_images(mock_boto):
     result = api._get_images(mock_client, "image-1-$serial", mock_options)
 
     assert result == [
-        {"Name": "image-1-126", "ImageId": "126"},
-        {"Name": "image-1-125", "ImageId": "125"},
-        {"Name": "image-1-124", "ImageId": "124"},
-        {"Name": "image-1-123", "ImageId": "123"},
+        {"Name": "image-1-126", "ImageId": "126", "CreationDate": ONE_MONTH_AGO},
+        {"Name": "image-1-125", "ImageId": "125", "CreationDate": ONE_MONTH_AGO},
+        {"Name": "image-1-124", "ImageId": "124", "CreationDate": ONE_MONTH_AGO},
+        {"Name": "image-1-123", "ImageId": "123", "CreationDate": ONE_MONTH_AGO},
     ]
 
 
@@ -94,12 +97,12 @@ def test_get_images_options(mock_boto, options_dict):
 def test_apply_policy(mock_boto, mock_deprecate_images, mock_delete_images):
     mock_client = mock_boto.client.return_value
     region_images = {
-        "image-20250101": [("region-1", "ami-111"), ("region-2", "ami-112")],
-        "image-20250201": [("region-2", "ami-113")],
-        "image-20250301": [("region-1", "ami-211"), ("region-2", "ami-212")],
-        "image-20250401": [("region-1", "ami-311"), ("region-2", "ami-312")],
-        "image-20250501": [("region-1", "ami-411"), ("region-2", "ami-412")],
-        "image-20250601": [("region-2", "ami-413")],
+        "image-20250101": [("region-1", "ami-111",ONE_MONTH_AGO), ("region-2", "ami-112",ONE_MONTH_AGO)],
+        "image-20250201": [("region-2", "ami-113",ONE_MONTH_AGO)],
+        "image-20250301": [("region-1", "ami-211",ONE_MONTH_AGO), ("region-2", "ami-212",ONE_MONTH_AGO)],
+        "image-20250401": [("region-1", "ami-311",ONE_MONTH_AGO), ("region-2", "ami-312",ONE_MONTH_AGO)],
+        "image-20250501": [("region-1", "ami-411",ONE_MONTH_AGO), ("region-2", "ami-412",ONE_MONTH_AGO)],
+        "image-20250601": [("region-2", "ami-413",ONE_MONTH_AGO)],
     }
     region_clients = {"region-1": mock_client, "region-2": mock_client}
 
@@ -109,8 +112,8 @@ def test_apply_policy(mock_boto, mock_deprecate_images, mock_delete_images):
         True,
         region_clients,
         {
-            "image-20250101": [("region-1", "ami-111"), ("region-2", "ami-112")],
-            "image-20250201": [("region-2", "ami-113")],
+            "image-20250101": [("region-1", "ami-111",ONE_MONTH_AGO), ("region-2", "ami-112",ONE_MONTH_AGO)],
+            "image-20250201": [("region-2", "ami-113",ONE_MONTH_AGO)],
         },
     )
 
@@ -120,10 +123,10 @@ def test_apply_policy(mock_boto, mock_deprecate_images, mock_delete_images):
         True,
         region_clients,
         {
-            "image-20250101": [("region-1", "ami-111"), ("region-2", "ami-112")],
-            "image-20250201": [("region-2", "ami-113")],
-            "image-20250301": [("region-1", "ami-211"), ("region-2", "ami-212")],
-            "image-20250401": [("region-1", "ami-311"), ("region-2", "ami-312")],
+            "image-20250101": [("region-1", "ami-111",ONE_MONTH_AGO), ("region-2", "ami-112",ONE_MONTH_AGO)],
+            "image-20250201": [("region-2", "ami-113",ONE_MONTH_AGO)],
+            "image-20250301": [("region-1", "ami-211",ONE_MONTH_AGO), ("region-2", "ami-212",ONE_MONTH_AGO)],
+            "image-20250401": [("region-1", "ami-311",ONE_MONTH_AGO), ("region-2", "ami-312",ONE_MONTH_AGO)],
         },
     )
 
@@ -151,18 +154,18 @@ def test_snapshot_skipped_if_in_use(mock_boto, mock_perform_operation):
 def test_action_output(mock_boto, mock_get_snapshot_ids):
     region1_images = {
         "Images": [
-            {"ImageId": "ami-111", "Name": "Image-20250101"},
-            {"ImageId": "ami-112", "Name": "Image-20250102"},
-            {"ImageId": "ami-113", "Name": "Image-20250103"},
-            {"ImageId": "ami-114", "Name": "Image-20250104"},
+            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": ONE_MONTH_AGO},
+            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": ONE_MONTH_AGO},
+            {"ImageId": "ami-113", "Name": "Image-20250103", "CreationDate": ONE_MONTH_AGO},
+            {"ImageId": "ami-114", "Name": "Image-20250104", "CreationDate": ONE_MONTH_AGO},
         ]
     }
     region2_images = {
         "Images": [
-            {"ImageId": "ami-111", "Name": "Image-20250101"},
-            {"ImageId": "ami-112", "Name": "Image-20250102"},
+            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": ONE_MONTH_AGO},
+            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": ONE_MONTH_AGO},
             # ami-113 is not in region2
-            {"ImageId": "ami-114", "Name": "Image-20250104"},
+            {"ImageId": "ami-114", "Name": "Image-20250104", "CreationDate": ONE_MONTH_AGO},
         ]
     }
 
@@ -194,6 +197,180 @@ def test_action_output(mock_boto, mock_get_snapshot_ids):
                 keep=["Image-20250104", "Image-20250102"],
                 skip=["Image-20250103"],
             ),
-            policy={"action": "deprecate", "keep": 2},
+            policy={"action": "deprecate", "keep": 2, "keep_days": 0},
+        )
+    }
+
+
+@patch("ami_deprecation_tool.api._get_snapshot_ids")
+@patch("ami_deprecation_tool.api.boto3")
+def test_deprecate_images_past_expiration(mock_boto, mock_get_snapshot_ids):
+    region1_images = {
+        "Images": [
+            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-113", "Name": "Image-20250103", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-114", "Name": "Image-20250104", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-115", "Name": "Image-20250105", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-116", "Name": "Image-20250106", "CreationDate": ONE_MONTH_AGO},
+        ]
+    }
+    region2_images = {
+        "Images": [
+            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-113", "Name": "Image-20250103", "CreationDate": SIX_MONTHS_AGO},
+            # ami-114 is not in region2
+            {"ImageId": "ami-115", "Name": "Image-20250105", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-116", "Name": "Image-20250106", "CreationDate": ONE_MONTH_AGO},
+        ]
+    }
+
+    base_client = MagicMock()
+    region1_client = MagicMock()
+    region2_client = MagicMock()
+
+    base_client.describe_regions.return_value = {"Regions": [{"RegionName": "region1"}, {"RegionName": "region2"}]}
+    region1_client.describe_images.return_value = region1_images
+    region2_client.describe_images.return_value = region2_images
+
+    mock_boto.client.side_effect = [base_client, region1_client, region2_client]
+
+    config = configmodels.ConfigModel(
+        **{
+            "images": {
+                "image-20250101": {"action": "deprecate", "keep": 3, "keep_days": 90},
+            },
+            "options": {},
+        }
+    )
+
+    actions = api.deprecate(config, True)
+
+    assert actions == {
+        "image-20250101": api.Actions(
+            images=api.ActionImages(
+                delete=[],
+                deprecate=["Image-20250101", "Image-20250102"],
+                keep=["Image-20250106", "Image-20250105", "Image-20250103"],
+                skip=["Image-20250104"],
+            ),
+            policy={"action": "deprecate", "keep": 3, "keep_days": 90},
+        )
+    }
+
+
+@patch("ami_deprecation_tool.api._get_snapshot_ids")
+@patch("ami_deprecation_tool.api.boto3")
+def test_keep_past_expiration(mock_boto, mock_get_snapshot_ids):
+    region1_images = {
+        "Images": [
+            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-113", "Name": "Image-20250103", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-114", "Name": "Image-20250104", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-115", "Name": "Image-20250105", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-116", "Name": "Image-20250106", "CreationDate": SIX_MONTHS_AGO},
+        ]
+    }
+    region2_images = {
+        "Images": [
+            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-113", "Name": "Image-20250103", "CreationDate": SIX_MONTHS_AGO},
+            # ami-114 is not in region2
+            {"ImageId": "ami-115", "Name": "Image-20250105", "CreationDate": SIX_MONTHS_AGO},
+            {"ImageId": "ami-116", "Name": "Image-20250106", "CreationDate": SIX_MONTHS_AGO},
+        ]
+    }
+
+    base_client = MagicMock()
+    region1_client = MagicMock()
+    region2_client = MagicMock()
+
+    base_client.describe_regions.return_value = {"Regions": [{"RegionName": "region1"}, {"RegionName": "region2"}]}
+    region1_client.describe_images.return_value = region1_images
+    region2_client.describe_images.return_value = region2_images
+
+    mock_boto.client.side_effect = [base_client, region1_client, region2_client]
+
+    config = configmodels.ConfigModel(
+        **{
+            "images": {
+                "image-20250101": {"action": "deprecate", "keep": 3, "keep_days": 90},
+            },
+            "options": {},
+        }
+    )
+
+    actions = api.deprecate(config, True)
+
+    assert actions == {
+        "image-20250101": api.Actions(
+            images=api.ActionImages(
+                delete=[],
+                deprecate=["Image-20250101", "Image-20250102"],
+                keep=["Image-20250106", "Image-20250105", "Image-20250103"],
+                skip=["Image-20250104"],
+            ),
+            policy={"action": "deprecate", "keep": 3, "keep_days": 90},
+        )
+    }
+
+
+@patch("ami_deprecation_tool.api._get_snapshot_ids")
+@patch("ami_deprecation_tool.api.boto3")
+def test_keep_unexpired(mock_boto, mock_get_snapshot_ids):
+    region1_images = {
+        "Images": [
+            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": ONE_MONTH_AGO},
+            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": ONE_MONTH_AGO},
+            {"ImageId": "ami-113", "Name": "Image-20250103", "CreationDate": ONE_MONTH_AGO},
+            {"ImageId": "ami-114", "Name": "Image-20250104", "CreationDate": ONE_MONTH_AGO},
+            {"ImageId": "ami-115", "Name": "Image-20250105", "CreationDate": ONE_MONTH_AGO},
+            {"ImageId": "ami-116", "Name": "Image-20250106", "CreationDate": ONE_MONTH_AGO},
+        ]
+    }
+    region2_images = {
+        "Images": [
+            {"ImageId": "ami-111", "Name": "Image-20250101", "CreationDate": ONE_MONTH_AGO},
+            {"ImageId": "ami-112", "Name": "Image-20250102", "CreationDate": ONE_MONTH_AGO},
+            {"ImageId": "ami-113", "Name": "Image-20250103", "CreationDate": ONE_MONTH_AGO},
+            # ami-114 is not in region2
+            {"ImageId": "ami-115", "Name": "Image-20250105", "CreationDate": ONE_MONTH_AGO},
+            {"ImageId": "ami-116", "Name": "Image-20250106", "CreationDate": ONE_MONTH_AGO},
+        ]
+    }
+
+    base_client = MagicMock()
+    region1_client = MagicMock()
+    region2_client = MagicMock()
+
+    base_client.describe_regions.return_value = {"Regions": [{"RegionName": "region1"}, {"RegionName": "region2"}]}
+    region1_client.describe_images.return_value = region1_images
+    region2_client.describe_images.return_value = region2_images
+
+    mock_boto.client.side_effect = [base_client, region1_client, region2_client]
+
+    config = configmodels.ConfigModel(
+        **{
+            "images": {
+                "image-20250101": {"action": "deprecate", "keep": 3, "keep_days": 90},
+            },
+            "options": {},
+        }
+    )
+
+    actions = api.deprecate(config, True)
+
+    assert actions == {
+        "image-20250101": api.Actions(
+            images=api.ActionImages(
+                delete=[],
+                deprecate=[],
+                keep=["Image-20250106", "Image-20250105", "Image-20250103", "Image-20250102", "Image-20250101"],
+                skip=["Image-20250104"],
+            ),
+            policy={"action": "deprecate", "keep": 3, "keep_days": 90},
         )
     }
