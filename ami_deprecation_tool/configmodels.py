@@ -12,6 +12,7 @@ class ConfigPolicyModel(BaseModel):
         description="The action to be performed on AMIs that are out of policy"
     )
     keep: int = Field(description="The number of AMIs to exempt from the policy")
+    keep_days: int = Field(description="How many days to exempt AMIs from the policy", default=0)
 
 
 class ConfigOptionsModel(BaseModel):
