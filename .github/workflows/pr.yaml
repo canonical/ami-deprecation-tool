@@ -20,11 +20,11 @@ jobs:
       - name: Install tox and any other packages
         run: |
           pip3 install tox
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run tox
         run: tox
   snap:
     runs-on: [self-hosted, linux, AMD64, medium, noble]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: snapcore/action-build@v1
