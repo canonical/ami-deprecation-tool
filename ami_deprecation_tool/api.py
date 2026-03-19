@@ -107,7 +107,7 @@ def _image_is_expired(images: list[RegionImageContainer], policy: ConfigPolicyMo
     """
 
     # check if the image is has existed longer than keep_days days
-    cutoff = dt.datetime.now() - dt.timedelta(days=policy.keep_days)
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=policy.keep_days)
 
     return images[0].creation_date < cutoff
 
@@ -266,7 +266,7 @@ def _deprecate_image(image_name: str, clients: dict[str, EC2Client], image: Regi
         client.enable_image_deprecation,
         {
             "ImageId": image.image_id,
-            "DeprecateAt": str(dt.datetime.now() + dt.timedelta(minutes=1)),
+            "DeprecateAt": str(dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=1)),
             "DryRun": dry_run,
         },
     )
