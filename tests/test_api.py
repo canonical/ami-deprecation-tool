@@ -1,13 +1,13 @@
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
 from ami_deprecation_tool import api, configmodels
 
-ONE_MONTH_AGO = datetime.now() - timedelta(days=30)
-SIX_MONTHS_AGO = datetime.now() - timedelta(days=180)
+ONE_MONTH_AGO = datetime.now(timezone.utc) - timedelta(days=30)
+SIX_MONTHS_AGO = datetime.now(timezone.utc) - timedelta(days=180)
 
 
 def mk_image(image_id, name, date):
@@ -94,7 +94,7 @@ def test_get_images_options(mock_boto, options_dict):
     mock_client = mock_boto.client.return_value
     options = configmodels.ConfigOptionsModel(**options_dict)
     image_name = "image-name"
-    future_deprecation_time = (datetime.now() + timedelta(minutes=5)).isoformat()
+    future_deprecation_time = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
 
     mock_images = {
         "Images": [
