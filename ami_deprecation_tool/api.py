@@ -80,7 +80,7 @@ def deprecate(config: ConfigModel, dry_run: bool) -> dict[str, Actions]:
                     RegionImageContainer(
                         region,
                         image["ImageId"],
-                        dt.datetime.fromisoformat(str(image["CreationDate"])),
+                        dt.datetime.fromisoformat(str(image["CreationDate"]).replace("Z", "+00:00")),
                         _get_snapshot_ids(image),
                     )
                 )
@@ -193,7 +193,9 @@ def _get_images(client: EC2Client, name: str, options: ConfigOptionsModel) -> li
         deprecation_time = image.get("DeprecationTime", "")
         if not deprecation_time:
             return False
-        if dt.datetime.fromisoformat(deprecation_time.rstrip("Z")) > dt.datetime.now():
+        if dt.datetime.fromisoformat(deprecation_time.rstrip("Z")).replace(tzinfo=dt.timezone.utc) > dt.datetime.now(
+            dt.timezone.utc
+        ):
             return False
         return True
 
